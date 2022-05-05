@@ -1,5 +1,6 @@
 import argparse
 import gc
+import os
 
 import clip
 import torch
@@ -19,16 +20,18 @@ from guided_diffusion.script_util import (
 
 parser = argparse.ArgumentParser()
 
+glid_path = os.environ.get('GLID_PATH', '')
+
 parser.add_argument(
-    '--model_path', type=str, default='finetune.pt', help='path to the diffusion model'
+    '--model_path', type=str, default=f'{glid_path}/finetune.pt', help='path to the diffusion model'
 )
 
 parser.add_argument(
-    '--kl_path', type=str, default='kl-f8.pt', help='path to the LDM first stage model'
+    '--kl_path', type=str, default=f'{glid_path}/kl-f8.pt', help='path to the LDM first stage model'
 )
 
 parser.add_argument(
-    '--bert_path', type=str, default='bert.pt', help='path to the LDM first stage model'
+    '--bert_path', type=str, default=f'{glid_path}/bert.pt', help='path to the LDM first stage model'
 )
 
 parser.add_argument(
