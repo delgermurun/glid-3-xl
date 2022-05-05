@@ -1,3 +1,4 @@
+import os.path
 from pathlib import Path
 
 import clip
@@ -259,10 +260,10 @@ def do_run(runtime_args):
 
             out = TF.to_pil_image(out.squeeze(0).add(1).div(2).clamp(0, 1))
 
-            Path('output').mkdir(exist_ok=True)
+            Path(runtime_args.output_path).mkdir(exist_ok=True)
 
-            filename = (
-                f'output/{runtime_args.prefix}{i * runtime_args.batch_size + k:05}.png'
+            filename = os.path.join(runtime_args.output_path,
+                f'{runtime_args.prefix}{i * runtime_args.batch_size + k:05}.png'
             )
             out.save(filename)
 

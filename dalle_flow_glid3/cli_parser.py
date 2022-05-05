@@ -4,7 +4,7 @@ import os
 
 parser = argparse.ArgumentParser()
 
-glid_path = os.environ.get('GLID_PATH', '')
+glid_path = os.environ.get('GLID_MODEL_PATH', '')
 
 parser.add_argument(
     '--model_path',
@@ -49,6 +49,10 @@ parser.add_argument(
 
 parser.add_argument(
     '--prefix', type=str, required=False, default='', help='prefix for output files'
+)
+
+parser.add_argument(
+    '--output_path', type=str, required=False, default='', help='output dir'
 )
 
 parser.add_argument(
