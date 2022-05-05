@@ -90,7 +90,7 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    '--steps', type=int, default=0, required=False, help='number of diffusion steps'
+    '--steps', type=int, default=100, required=False, help='number of diffusion steps'
 )
 
 parser.add_argument('--cpu', dest='cpu', action='store_true')
