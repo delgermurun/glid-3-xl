@@ -11,8 +11,8 @@ import numpy as np
 import torch as th
 import torch.distributed as dist
 
-from guided_diffusion import dist_util, logger
-from guided_diffusion.script_util import (
+from ..guided_diffusion import dist_util, logger
+from ..guided_diffusion.script_util import (
     sr_model_and_diffusion_defaults,
     sr_create_model_and_diffusion,
     args_to_dict,

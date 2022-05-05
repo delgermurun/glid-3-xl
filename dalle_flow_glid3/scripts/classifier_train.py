@@ -12,17 +12,17 @@ import torch.nn.functional as F
 from torch.nn.parallel.distributed import DistributedDataParallel as DDP
 from torch.optim import AdamW
 
-from guided_diffusion import dist_util, logger
-from guided_diffusion.fp16_util import MixedPrecisionTrainer
-from guided_diffusion.image_datasets import load_data
-from guided_diffusion.resample import create_named_schedule_sampler
-from guided_diffusion.script_util import (
+from ..guided_diffusion import dist_util, logger
+from ..guided_diffusion.fp16_util import MixedPrecisionTrainer
+from ..guided_diffusion.image_datasets import load_data
+from ..guided_diffusion.resample import create_named_schedule_sampler
+from ..guided_diffusion.script_util import (
     add_dict_to_argparser,
     args_to_dict,
     classifier_and_diffusion_defaults,
     create_classifier_and_diffusion,
 )
-from guided_diffusion.train_util import parse_resume_step_from_filename, log_loss_dict
+from ..guided_diffusion.train_util import parse_resume_step_from_filename, log_loss_dict
 
 
 def main():
