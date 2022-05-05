@@ -182,7 +182,7 @@ model_params = {
     'num_heads': 8,
     'num_res_blocks': 2,
     'resblock_updown': False,
-    'use_fp16': True,
+    'use_fp16': False,
     'use_scale_shift_norm': False,
     'clip_embed_dim': 768 if 'clip_proj.weight' in model_state_dict else None,
     'image_condition': True
