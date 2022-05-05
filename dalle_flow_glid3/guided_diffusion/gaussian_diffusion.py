@@ -957,6 +957,8 @@ class GaussianDiffusion:
             
         if skip_timesteps and init_image is None:
             init_image = th.zeros_like(img)
+
+        print(init_image, shape, indices)
             
         if init_image is not None:
             my_t = th.ones([shape[0]], device=device, dtype=th.long) * indices[0]
