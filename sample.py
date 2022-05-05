@@ -1,6 +1,6 @@
 import argparse
-import gc
 import os
+from pathlib import Path
 
 import clip
 import torch
@@ -23,15 +23,24 @@ parser = argparse.ArgumentParser()
 glid_path = os.environ.get('GLID_PATH', '')
 
 parser.add_argument(
-    '--model_path', type=str, default=f'{glid_path}/finetune.pt', help='path to the diffusion model'
+    '--model_path',
+    type=str,
+    default=f'{glid_path}/finetune.pt',
+    help='path to the diffusion model',
 )
 
 parser.add_argument(
-    '--kl_path', type=str, default=f'{glid_path}/kl-f8.pt', help='path to the LDM first stage model'
+    '--kl_path',
+    type=str,
+    default=f'{glid_path}/kl-f8.pt',
+    help='path to the LDM first stage model',
 )
 
 parser.add_argument(
-    '--bert_path', type=str, default=f'{glid_path}/bert.pt', help='path to the LDM first stage model'
+    '--bert_path',
+    type=str,
+    default=f'{glid_path}/bert.pt',
+    help='path to the LDM first stage model',
 )
 
 parser.add_argument(
@@ -120,7 +129,7 @@ parser.add_argument(
     '--ddpm', dest='ddpm', action='store_true'
 )  # turn on to use 50 step ddim
 
-args = parser.parse_args()
+static_args = parser.parse_args([])
 
 
 class MakeCutouts(nn.Module):
@@ -142,7 +151,7 @@ class MakeCutouts(nn.Module):
             )
             offsetx = torch.randint(0, sideX - size + 1, ())
             offsety = torch.randint(0, sideY - size + 1, ())
-            cutout = input[:, :, offsety: offsety + size, offsetx: offsetx + size]
+            cutout = input[:, :, offsety : offsety + size, offsetx : offsetx + size]
             cutouts.append(F.adaptive_avg_pool2d(cutout, self.cut_size))
         return torch.cat(cutouts)
 
@@ -158,15 +167,15 @@ def tv_loss(input):
     input = F.pad(input, (0, 1, 0, 1), 'replicate')
     x_diff = input[..., :-1, 1:] - input[..., :-1, :-1]
     y_diff = input[..., 1:, :-1] - input[..., :-1, :-1]
-    return (x_diff ** 2 + y_diff ** 2).mean([1, 2, 3])
+    return (x_diff**2 + y_diff**2).mean([1, 2, 3])
 
 
 device = torch.device(
-    'cuda:0' if (torch.cuda.is_available() and not args.cpu) else 'cpu'
+    'cuda:0' if (torch.cuda.is_available() and not static_args.cpu) else 'cpu'
 )
 print('Using device:', device)
 
-model_state_dict = torch.load(args.model_path, map_location='cpu')
+model_state_dict = torch.load(static_args.model_path, map_location='cpu')
 
 model_params = {
     'attention_resolutions': '32,16,8',
@@ -193,26 +202,26 @@ model_params = {
     else False,
 }
 
-if args.ddpm:
+if static_args.ddpm:
     model_params['timestep_respacing'] = 1000
-if args.ddim:
-    if args.steps:
-        model_params['timestep_respacing'] = 'ddim' + str(args.steps)
+if static_args.ddim:
+    if static_args.steps:
+        model_params['timestep_respacing'] = 'ddim' + str(static_args.steps)
     else:
         model_params['timestep_respacing'] = 'ddim50'
-elif args.steps:
-    model_params['timestep_respacing'] = str(args.steps)
+elif static_args.steps:
+    model_params['timestep_respacing'] = str(static_args.steps)
 
 model_config = model_and_diffusion_defaults()
 model_config.update(model_params)
 
-if args.cpu:
+if static_args.cpu:
     model_config['use_fp16'] = False
 
 # Load models
 model, diffusion = create_model_and_diffusion(**model_config)
 model.load_state_dict(model_state_dict, strict=False)
-model.requires_grad_(args.clip_guidance).eval().to(device)
+model.requires_grad_(static_args.clip_guidance).eval().to(device)
 
 if model_config['use_fp16']:
     model.convert_to_fp16()
@@ -226,14 +235,14 @@ def set_requires_grad(model, value):
 
 
 # vae
-ldm = torch.load(args.kl_path, map_location="cpu")
+ldm = torch.load(static_args.kl_path, map_location="cpu")
 ldm.to(device)
 ldm.eval()
-ldm.requires_grad_(args.clip_guidance)
-set_requires_grad(ldm, args.clip_guidance)
+ldm.requires_grad_(static_args.clip_guidance)
+set_requires_grad(ldm, static_args.clip_guidance)
 
 bert = BERTEmbedder(1280, 32)
-sd = torch.load(args.bert_path, map_location="cpu")
+sd = torch.load(static_args.bert_path, map_location="cpu")
 bert.load_state_dict(sd)
 
 bert.to(device)
@@ -248,24 +257,32 @@ normalize = transforms.Normalize(
 )
 
 
-def do_run():
-    if args.seed >= 0:
-        torch.manual_seed(args.seed)
+def do_run(runtime_args):
+    if runtime_args.seed >= 0:
+        torch.manual_seed(runtime_args.seed)
 
     # bert context
-    text_emb = bert.encode([args.text] * args.batch_size).to(device).float()
-    text_blank = bert.encode([args.negative] * args.batch_size).to(device).float()
+    text_emb = (
+        bert.encode([runtime_args.text] * runtime_args.batch_size).to(device).float()
+    )
+    text_blank = (
+        bert.encode([runtime_args.negative] * runtime_args.batch_size)
+        .to(device)
+        .float()
+    )
 
-    text = clip.tokenize([args.text] * args.batch_size, truncate=True).to(device)
+    text = clip.tokenize(
+        [runtime_args.text] * runtime_args.batch_size, truncate=True
+    ).to(device)
     text_clip_blank = clip.tokenize(
-        [args.negative] * args.batch_size, truncate=True
+        [runtime_args.negative] * runtime_args.batch_size, truncate=True
     ).to(device)
 
     # clip context
     text_emb_clip = clip_model.encode_text(text)
     text_emb_clip_blank = clip_model.encode_text(text_clip_blank)
 
-    make_cutouts = MakeCutouts(clip_model.visual.input_resolution, args.cutn)
+    make_cutouts = MakeCutouts(clip_model.visual.input_resolution, runtime_args.cutn)
 
     image_embed = None
 
@@ -273,7 +290,11 @@ def do_run():
     if model_params['image_condition']:
         # using inpaint model but no image is provided
         image_embed = torch.zeros(
-            args.batch_size * 2, 4, args.height // 8, args.width // 8, device=device
+            runtime_args.batch_size * 2,
+            4,
+            runtime_args.height // 8,
+            runtime_args.width // 8,
+            device=device,
         )
 
     kwargs = {
@@ -291,7 +312,7 @@ def do_run():
         model_out = model(combined, ts, **kwargs)
         eps, rest = model_out[:, :3], model_out[:, 3:]
         cond_eps, uncond_eps = torch.split(eps, len(eps) // 2, dim=0)
-        half_eps = uncond_eps + args.guidance_scale * (cond_eps - uncond_eps)
+        half_eps = uncond_eps + runtime_args.guidance_scale * (cond_eps - uncond_eps)
         eps = torch.cat([half_eps, half_eps], dim=0)
         return torch.cat([eps, rest], dim=1)
 
@@ -299,18 +320,18 @@ def do_run():
 
     def cond_fn(x, t, context=None, clip_embed=None, image_embed=None):
         with torch.enable_grad():
-            x = x[: args.batch_size].detach().requires_grad_()
+            x = x[: runtime_args.batch_size].detach().requires_grad_()
 
             n = x.shape[0]
 
             my_t = torch.ones([n], device=device, dtype=torch.long) * cur_t
 
             kw = {
-                'context': context[: args.batch_size],
-                'clip_embed': clip_embed[: args.batch_size]
+                'context': context[: runtime_args.batch_size],
+                'clip_embed': clip_embed[: runtime_args.batch_size]
                 if model_params['clip_embed_dim']
                 else None,
-                'image_embed': image_embed[: args.batch_size]
+                'image_embed': image_embed[: runtime_args.batch_size]
                 if image_embed is not None
                 else None,
             }
@@ -331,54 +352,65 @@ def do_run():
             dists = spherical_dist_loss(
                 clip_embeds.unsqueeze(1), text_emb_clip.unsqueeze(0)
             )
-            dists = dists.view([args.cutn, n, -1])
+            dists = dists.view([runtime_args.cutn, n, -1])
 
             losses = dists.sum(2).mean(0)
 
-            loss = losses.sum() * args.clip_guidance_scale
+            loss = losses.sum() * runtime_args.clip_guidance_scale
 
             return -torch.autograd.grad(loss, x)[0]
 
-    if args.ddpm:
+    if runtime_args.ddpm:
         sample_fn = diffusion.ddpm_sample_loop_progressive
-    elif args.ddim:
+    elif runtime_args.ddim:
         sample_fn = diffusion.ddim_sample_loop_progressive
     else:
         sample_fn = diffusion.plms_sample_loop_progressive
 
     def save_sample(i, sample):
-        for k, image in enumerate(sample['pred_xstart'][: args.batch_size]):
+        for k, image in enumerate(sample['pred_xstart'][: runtime_args.batch_size]):
             image /= 0.18215
             im = image.unsqueeze(0)
             out = ldm.decode(im)
 
             out = TF.to_pil_image(out.squeeze(0).add(1).div(2).clamp(0, 1))
 
-            filename = f'output/{args.prefix}{i * args.batch_size + k:05}.png'
+            Path('output').mkdir(exist_ok=True)
+
+            filename = (
+                f'output/{runtime_args.prefix}{i * runtime_args.batch_size + k:05}.png'
+            )
             out.save(filename)
 
-    if args.init_image:
-        init = Image.open(args.init_image).convert('RGB')
-        init = init.resize((int(args.width), int(args.height)), Image.LANCZOS)
+    if runtime_args.init_image:
+        init = Image.open(runtime_args.init_image).convert('RGB')
+        init = init.resize(
+            (int(runtime_args.width), int(runtime_args.height)), Image.LANCZOS
+        )
         init = TF.to_tensor(init).to(device).unsqueeze(0).clamp(0, 1)
         h = ldm.encode(init * 2 - 1).sample() * 0.18215
-        init = torch.cat(args.batch_size * 2 * [h], dim=0)
+        init = torch.cat(runtime_args.batch_size * 2 * [h], dim=0)
     else:
         init = None
 
-    for i in range(args.num_batches):
+    for i in range(runtime_args.num_batches):
         cur_t = diffusion.num_timesteps - 1
 
         samples = sample_fn(
             model_fn,
-            (args.batch_size * 2, 4, int(args.height / 8), int(args.width / 8)),
+            (
+                runtime_args.batch_size * 2,
+                4,
+                int(runtime_args.height / 8),
+                int(runtime_args.width / 8),
+            ),
             clip_denoised=False,
             model_kwargs=kwargs,
-            cond_fn=cond_fn if args.clip_guidance else None,
+            cond_fn=cond_fn if runtime_args.clip_guidance else None,
             device=device,
             progress=True,
             init_image=init,
-            skip_timesteps=args.skip_timesteps,
+            skip_timesteps=runtime_args.skip_timesteps,
         )
 
         for j, sample in enumerate(samples):
@@ -387,7 +419,3 @@ def do_run():
                 save_sample(i, sample)
 
         save_sample(i, sample)
-
-
-gc.collect()
-do_run()
