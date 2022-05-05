@@ -6,9 +6,9 @@ import argparse
 import io
 import os
 
-from PIL import Image
 import lmdb
 import numpy as np
+from PIL import Image
 
 
 def read_images(lmdb_path, image_size):
@@ -27,7 +27,7 @@ def read_images(lmdb_path, image_size):
             h, w, _ = arr.shape
             h_off = (h - image_size) // 2
             w_off = (w - image_size) // 2
-            arr = arr[h_off : h_off + image_size, w_off : w_off + image_size]
+            arr = arr[h_off: h_off + image_size, w_off: w_off + image_size]
             yield arr
 
 
