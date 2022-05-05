@@ -280,7 +280,6 @@ def do_run(runtime_args):
 
     for i in range(runtime_args.num_batches):
 
-        print(init)
         cur_t = diffusion.num_timesteps - 1
 
         samples = sample_fn(
