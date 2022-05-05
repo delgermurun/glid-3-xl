@@ -278,6 +278,7 @@ def do_run(runtime_args):
     else:
         init = None
 
+
     print(init)
 
     for i in range(runtime_args.num_batches):
