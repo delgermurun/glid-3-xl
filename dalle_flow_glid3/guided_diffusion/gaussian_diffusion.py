@@ -946,6 +946,8 @@ class GaussianDiffusion:
         if device is None:
             device = next(model.parameters()).device
         assert isinstance(shape, (tuple, list))
+
+        print(self.num_timesteps, skip_timesteps)
         
         indices = list(range(self.num_timesteps - skip_timesteps))[::-1]
 
@@ -958,8 +960,6 @@ class GaussianDiffusion:
         if skip_timesteps and init_image is None:
             init_image = th.zeros_like(img)
 
-        print(init_image, shape, indices)
-            
         if init_image is not None:
             my_t = th.ones([shape[0]], device=device, dtype=th.long) * indices[0]
             img = self.q_sample(init_image, my_t, img)
