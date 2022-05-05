@@ -1,7 +1,7 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
-    name="guided-diffusion",
-    py_modules=["guided_diffusion"],
-    install_requires=["blobfile>=1.0.5", "torch", "tqdm"],
+    name='dalle_flow_glid3',
+    packages=find_packages(),
+    install_requires=["blobfile>=1.0.5"],
 )

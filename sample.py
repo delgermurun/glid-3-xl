@@ -1,5 +1,3 @@
-import argparse
-import os
 from pathlib import Path
 
 import clip
@@ -10,126 +8,12 @@ from torch.nn import functional as F
 from torchvision import transforms
 from torchvision.transforms import functional as TF
 
-from encoders.modules import BERTEmbedder
-from guided_diffusion.script_util import (
+from .cli_parser import static_args
+from .encoders.modules import BERTEmbedder
+from .guided_diffusion.script_util import (
     create_model_and_diffusion,
     model_and_diffusion_defaults,
 )
-
-# argument parsing
-
-parser = argparse.ArgumentParser()
-
-glid_path = os.environ.get('GLID_PATH', '')
-
-parser.add_argument(
-    '--model_path',
-    type=str,
-    default=f'{glid_path}/finetune.pt',
-    help='path to the diffusion model',
-)
-
-parser.add_argument(
-    '--kl_path',
-    type=str,
-    default=f'{glid_path}/kl-f8.pt',
-    help='path to the LDM first stage model',
-)
-
-parser.add_argument(
-    '--bert_path',
-    type=str,
-    default=f'{glid_path}/bert.pt',
-    help='path to the LDM first stage model',
-)
-
-parser.add_argument(
-    '--text', type=str, required=False, default='', help='your text prompt'
-)
-
-parser.add_argument(
-    '--negative', type=str, required=False, default='', help='negative text prompt'
-)
-
-parser.add_argument(
-    '--init_image', type=str, required=False, default=None, help='init image to use'
-)
-
-parser.add_argument(
-    '--skip_timesteps',
-    type=int,
-    required=False,
-    default=0,
-    help='how many diffusion steps are gonna be skipped',
-)
-
-parser.add_argument(
-    '--prefix', type=str, required=False, default='', help='prefix for output files'
-)
-
-parser.add_argument(
-    '--num_batches', type=int, default=1, required=False, help='number of batches'
-)
-
-parser.add_argument(
-    '--batch_size', type=int, default=1, required=False, help='batch size'
-)
-
-parser.add_argument(
-    '--width',
-    type=int,
-    default=256,
-    required=False,
-    help='image size of output (multiple of 8)',
-)
-
-parser.add_argument(
-    '--height',
-    type=int,
-    default=256,
-    required=False,
-    help='image size of output (multiple of 8)',
-)
-
-parser.add_argument('--seed', type=int, default=-1, required=False, help='random seed')
-
-parser.add_argument(
-    '--guidance_scale',
-    type=float,
-    default=5.0,
-    required=False,
-    help='classifier-free guidance scale',
-)
-
-parser.add_argument(
-    '--steps', type=int, default=0, required=False, help='number of diffusion steps'
-)
-
-parser.add_argument('--cpu', dest='cpu', action='store_true')
-
-parser.add_argument('--clip_guidance', dest='clip_guidance', action='store_true')
-
-parser.add_argument(
-    '--clip_guidance_scale',
-    type=float,
-    default=150,
-    required=False,
-    help='Controls how much the image should look like the prompt',
-)  # may need to use lower value for ddim
-
-parser.add_argument(
-    '--cutn', type=int, default=16, required=False, help='Number of cuts'
-)
-
-parser.add_argument(
-    '--ddim', dest='ddim', action='store_true'
-)  # turn on to use 50 step ddim
-
-parser.add_argument(
-    '--ddpm', dest='ddpm', action='store_true'
-)  # turn on to use 50 step ddim
-
-static_args = parser.parse_args([])
 
 
 class MakeCutouts(nn.Module):
@@ -151,7 +35,7 @@ class MakeCutouts(nn.Module):
             )
             offsetx = torch.randint(0, sideX - size + 1, ())
             offsety = torch.randint(0, sideY - size + 1, ())
-            cutout = input[:, :, offsety : offsety + size, offsetx : offsetx + size]
+            cutout = input[:, :, offsety: offsety + size, offsetx: offsetx + size]
             cutouts.append(F.adaptive_avg_pool2d(cutout, self.cut_size))
         return torch.cat(cutouts)
 
@@ -167,7 +51,7 @@ def tv_loss(input):
     input = F.pad(input, (0, 1, 0, 1), 'replicate')
     x_diff = input[..., :-1, 1:] - input[..., :-1, :-1]
     y_diff = input[..., 1:, :-1] - input[..., :-1, :-1]
-    return (x_diff**2 + y_diff**2).mean([1, 2, 3])
+    return (x_diff ** 2 + y_diff ** 2).mean([1, 2, 3])
 
 
 device = torch.device(
@@ -267,8 +151,8 @@ def do_run(runtime_args):
     )
     text_blank = (
         bert.encode([runtime_args.negative] * runtime_args.batch_size)
-        .to(device)
-        .float()
+            .to(device)
+            .float()
     )
 
     text = clip.tokenize(
