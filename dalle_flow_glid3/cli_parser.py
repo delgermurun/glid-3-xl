@@ -32,7 +32,7 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    '--negative', type=str, required=False, default='', help='negative text prompt'
+    '--negative', type=str, required=False, default='a', help='negative text prompt'
 )
 
 parser.add_argument(
@@ -90,7 +90,7 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    '--steps', type=int, default=100, required=False, help='number of diffusion steps'
+    '--steps', type=int, default=300, required=False, help='number of diffusion steps'
 )
 
 parser.add_argument('--cpu', dest='cpu', action='store_true')

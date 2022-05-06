@@ -1,12 +1,8 @@
 import os.path
 from pathlib import Path
 
-import clip
 import torch
 from PIL import Image
-from torch import nn
-from torch.nn import functional as F
-from torchvision import transforms
 from torchvision.transforms import functional as TF
 
 from .cli_parser import static_args
@@ -15,45 +11,6 @@ from .guided_diffusion.script_util import (
     create_model_and_diffusion,
     model_and_diffusion_defaults,
 )
-
-
-class MakeCutouts(nn.Module):
-    def __init__(self, cut_size, cutn, cut_pow=1.0):
-        super().__init__()
-
-        self.cut_size = cut_size
-        self.cutn = cutn
-        self.cut_pow = cut_pow
-
-    def forward(self, input):
-        sideY, sideX = input.shape[2:4]
-        max_size = min(sideX, sideY)
-        min_size = min(sideX, sideY, self.cut_size)
-        cutouts = []
-        for _ in range(self.cutn):
-            size = int(
-                torch.rand([]) ** self.cut_pow * (max_size - min_size) + min_size
-            )
-            offsetx = torch.randint(0, sideX - size + 1, ())
-            offsety = torch.randint(0, sideY - size + 1, ())
-            cutout = input[:, :, offsety: offsety + size, offsetx: offsetx + size]
-            cutouts.append(F.adaptive_avg_pool2d(cutout, self.cut_size))
-        return torch.cat(cutouts)
-
-
-def spherical_dist_loss(x, y):
-    x = F.normalize(x, dim=-1)
-    y = F.normalize(y, dim=-1)
-    return (x - y).norm(dim=-1).div(2).arcsin().pow(2).mul(2)
-
-
-def tv_loss(input):
-    """L2 total variation loss, as in Mahendran et al."""
-    input = F.pad(input, (0, 1, 0, 1), 'replicate')
-    x_diff = input[..., :-1, 1:] - input[..., :-1, :-1]
-    y_diff = input[..., 1:, :-1] - input[..., :-1, :-1]
-    return (x_diff ** 2 + y_diff ** 2).mean([1, 2, 3])
-
 
 device = torch.device(
     'cuda:0' if (torch.cuda.is_available() and not static_args.cpu) else 'cpu'
@@ -91,11 +48,15 @@ if static_args.ddpm:
     model_params['timestep_respacing'] = 1000
 if static_args.ddim:
     if static_args.steps:
-        model_params['timestep_respacing'] = 'ddim' + str(static_args.steps)
+        model_params['timestep_respacing'] = 'ddim' + os.environ.get(
+            'GLID3_STEPS', str(static_args.steps)
+        )
     else:
         model_params['timestep_respacing'] = 'ddim50'
 elif static_args.steps:
-    model_params['timestep_respacing'] = str(static_args.steps)
+    model_params['timestep_respacing'] = os.environ.get(
+        'GLID3_STEPS', str(static_args.steps)
+    )
 
 model_config = model_and_diffusion_defaults()
 model_config.update(model_params)
@@ -134,15 +95,10 @@ bert.to(device)
 bert.half().eval()
 set_requires_grad(bert, False)
 
-# clip
-clip_model, clip_preprocess = clip.load('ViT-L/14', device=device, jit=False)
-clip_model.eval().requires_grad_(False)
-normalize = transforms.Normalize(
-    mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711]
-)
+from clip_client import Client
 
 
-def do_run(runtime_args):
+async def do_run(runtime_args):
     if runtime_args.seed >= 0:
         torch.manual_seed(runtime_args.seed)
 
@@ -152,23 +108,20 @@ def do_run(runtime_args):
     )
     text_blank = (
         bert.encode([runtime_args.negative] * runtime_args.batch_size)
-            .to(device)
-            .float()
+        .to(device)
+        .float()
     )
 
-    text = clip.tokenize(
-        [runtime_args.text] * runtime_args.batch_size, truncate=True
-    ).to(device)
-    text_clip_blank = clip.tokenize(
-        [runtime_args.negative] * runtime_args.batch_size, truncate=True
-    ).to(device)
-
     # clip context
-    text_emb_clip = clip_model.encode_text(text)
-    text_emb_clip_blank = clip_model.encode_text(text_clip_blank)
+    clip_c = Client(server='grpc://demo-cas.jina.ai:51000')
+    text_emb_clip = await clip_c.aencode([runtime_args.text] * runtime_args.batch_size)
+    text_emb_clip_blank = await clip_c.aencode(
+        [runtime_args.negative] * runtime_args.batch_size
+    )
 
-    make_cutouts = MakeCutouts(clip_model.visual.input_resolution, runtime_args.cutn)
+    # torch.Size([8, 77, 1280]) torch.Size([8, 77, 1280]) (1, 768) (1, 768)
 
+    print(text_emb_clip.shape, type(text_emb_clip))
     image_embed = None
 
     # image context
@@ -184,7 +137,12 @@ def do_run(runtime_args):
 
     kwargs = {
         "context": torch.cat([text_emb, text_blank], dim=0).float(),
-        "clip_embed": torch.cat([text_emb_clip, text_emb_clip_blank], dim=0).float()
+        "clip_embed": torch.cat(
+            [torch.from_numpy(text_emb_clip), torch.from_numpy(text_emb_clip_blank)],
+            dim=0,
+        )
+        .to(device)
+        .float()
         if model_params['clip_embed_dim']
         else None,
         "image_embed": image_embed,
@@ -200,50 +158,6 @@ def do_run(runtime_args):
         half_eps = uncond_eps + runtime_args.guidance_scale * (cond_eps - uncond_eps)
         eps = torch.cat([half_eps, half_eps], dim=0)
         return torch.cat([eps, rest], dim=1)
-
-    cur_t = None
-
-    def cond_fn(x, t, context=None, clip_embed=None, image_embed=None):
-        with torch.enable_grad():
-            x = x[: runtime_args.batch_size].detach().requires_grad_()
-
-            n = x.shape[0]
-
-            my_t = torch.ones([n], device=device, dtype=torch.long) * cur_t
-
-            kw = {
-                'context': context[: runtime_args.batch_size],
-                'clip_embed': clip_embed[: runtime_args.batch_size]
-                if model_params['clip_embed_dim']
-                else None,
-                'image_embed': image_embed[: runtime_args.batch_size]
-                if image_embed is not None
-                else None,
-            }
-
-            out = diffusion.p_mean_variance(
-                model, x, my_t, clip_denoised=False, model_kwargs=kw
-            )
-
-            fac = diffusion.sqrt_one_minus_alphas_cumprod[cur_t]
-            x_in = out['pred_xstart'] * fac + x * (1 - fac)
-
-            x_in /= 0.18215
-
-            x_img = ldm.decode(x_in)
-
-            clip_in = normalize(make_cutouts(x_img.add(1).div(2)))
-            clip_embeds = clip_model.encode_image(clip_in).float()
-            dists = spherical_dist_loss(
-                clip_embeds.unsqueeze(1), text_emb_clip.unsqueeze(0)
-            )
-            dists = dists.view([runtime_args.cutn, n, -1])
-
-            losses = dists.sum(2).mean(0)
-
-            loss = losses.sum() * runtime_args.clip_guidance_scale
-
-            return -torch.autograd.grad(loss, x)[0]
 
     if runtime_args.ddpm:
         sample_fn = diffusion.ddpm_sample_loop_progressive
@@ -262,8 +176,9 @@ def do_run(runtime_args):
 
             Path(runtime_args.output_path).mkdir(exist_ok=True)
 
-            filename = os.path.join(runtime_args.output_path,
-                f'{runtime_args.prefix}{i * runtime_args.batch_size + k:05}.png'
+            filename = os.path.join(
+                runtime_args.output_path,
+                f'{runtime_args.prefix}{i * runtime_args.batch_size + k:05}.png',
             )
             out.save(filename)
 
@@ -291,7 +206,7 @@ def do_run(runtime_args):
             ),
             clip_denoised=False,
             model_kwargs=kwargs,
-            cond_fn=cond_fn if runtime_args.clip_guidance else None,
+            cond_fn=None,
             device=device,
             progress=True,
             init_image=init,
