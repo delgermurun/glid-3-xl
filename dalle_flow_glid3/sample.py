@@ -1,12 +1,10 @@
 import os.path
 from pathlib import Path
 
-import clip
 import torch
 from PIL import Image
 from torch import nn
 from torch.nn import functional as F
-from torchvision import transforms
 from torchvision.transforms import functional as TF
 
 from .cli_parser import static_args
@@ -134,12 +132,7 @@ bert.to(device)
 bert.half().eval()
 set_requires_grad(bert, False)
 
-# clip
-clip_model, clip_preprocess = clip.load('ViT-L/14', device=device, jit=False)
-clip_model.eval().requires_grad_(False)
-normalize = transforms.Normalize(
-    mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711]
-)
+from clip_client import Client
 
 
 def do_run(runtime_args):
@@ -156,18 +149,12 @@ def do_run(runtime_args):
             .float()
     )
 
-    text = clip.tokenize(
-        [runtime_args.text] * runtime_args.batch_size, truncate=True
-    ).to(device)
-    text_clip_blank = clip.tokenize(
-        [runtime_args.negative] * runtime_args.batch_size, truncate=True
-    ).to(device)
-
     # clip context
-    text_emb_clip = clip_model.encode_text(text)
-    text_emb_clip_blank = clip_model.encode_text(text_clip_blank)
+    clip_c = Client(server='grpc://demo-cas.jina.ai:51000')
+    text_emb_clip = clip_c.encode([runtime_args.text])
+    text_emb_clip_blank = clip_c.encode([runtime_args.negative])
 
-    make_cutouts = MakeCutouts(clip_model.visual.input_resolution, runtime_args.cutn)
+    make_cutouts = MakeCutouts(336, runtime_args.cutn)
 
     image_embed = None
 
@@ -232,8 +219,9 @@ def do_run(runtime_args):
 
             x_img = ldm.decode(x_in)
 
-            clip_in = normalize(make_cutouts(x_img.add(1).div(2)))
-            clip_embeds = clip_model.encode_image(clip_in).float()
+            clip_in = make_cutouts(x_img.add(1).div(2)).numpy()
+            print(clip_in.shape())
+            clip_embeds = clip_c.encode(clip_in).float()
             dists = spherical_dist_loss(
                 clip_embeds.unsqueeze(1), text_emb_clip.unsqueeze(0)
             )
@@ -263,8 +251,8 @@ def do_run(runtime_args):
             Path(runtime_args.output_path).mkdir(exist_ok=True)
 
             filename = os.path.join(runtime_args.output_path,
-                f'{runtime_args.prefix}{i * runtime_args.batch_size + k:05}.png'
-            )
+                                    f'{runtime_args.prefix}{i * runtime_args.batch_size + k:05}.png'
+                                    )
             out.save(filename)
 
     if runtime_args.init_image:
