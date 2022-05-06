@@ -167,6 +167,9 @@ def do_run(runtime_args):
     text_emb_clip = clip_model.encode_text(text)
     text_emb_clip_blank = clip_model.encode_text(text_clip_blank)
 
+    print(text_emb.shape, text_blank.shape, text_emb_clip.shape, text_emb_clip_blank.shape)
+    # torch.Size([8, 77, 1280]) torch.Size([8, 77, 1280]) (1, 768) (1, 768)
+
     make_cutouts = MakeCutouts(clip_model.visual.input_resolution, runtime_args.cutn)
 
     image_embed = None
