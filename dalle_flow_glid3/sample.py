@@ -151,8 +151,8 @@ async def do_run(runtime_args):
 
     # clip context
     clip_c = Client(server='grpc://demo-cas.jina.ai:51000')
-    text_emb_clip = await clip_c.aencode([runtime_args.text])
-    text_emb_clip_blank = await clip_c.aencode([runtime_args.negative])
+    text_emb_clip = await clip_c.aencode([runtime_args.text] * runtime_args.batch_size)
+    text_emb_clip_blank = await clip_c.aencode([runtime_args.negative] * runtime_args.batch_size)
 
     print(text_emb.shape, text_blank.shape, text_emb_clip.shape, text_emb_clip_blank.shape)
     # torch.Size([8, 77, 1280]) torch.Size([8, 77, 1280]) (1, 768) (1, 768)
@@ -173,7 +173,7 @@ async def do_run(runtime_args):
 
     kwargs = {
         "context": torch.cat([text_emb, text_blank], dim=0).float(),
-        "clip_embed": torch.cat([torch.from_numpy(text_emb_clip.squeeze()), torch.from_numpy(text_emb_clip_blank.squeeze())], dim=0).to(device).float()
+        "clip_embed": torch.cat([torch.from_numpy(text_emb_clip), torch.from_numpy(text_emb_clip_blank)], dim=0).to(device).float()
         if model_params['clip_embed_dim']
         else None,
         "image_embed": image_embed,
