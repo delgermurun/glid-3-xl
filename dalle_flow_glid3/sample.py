@@ -223,7 +223,7 @@ async def do_run(runtime_args):
             clip_in = make_cutouts(x_img.add(1).div(2)).numpy()
             print(clip_in.shape())
             clip_embeds = clip_c.aencode(clip_in).float()
-            print(clip_embeds)
+            print(clip_embeds.shape)
             dists = spherical_dist_loss(
                 clip_embeds.unsqueeze(1), text_emb_clip.unsqueeze(0)
             )
