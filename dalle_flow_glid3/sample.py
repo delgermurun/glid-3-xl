@@ -89,11 +89,11 @@ if static_args.ddpm:
     model_params['timestep_respacing'] = 1000
 if static_args.ddim:
     if static_args.steps:
-        model_params['timestep_respacing'] = 'ddim' + str(static_args.steps)
+        model_params['timestep_respacing'] = 'ddim' + os.environ.get('GLID3_STEPS', str(static_args.steps))
     else:
         model_params['timestep_respacing'] = 'ddim50'
 elif static_args.steps:
-    model_params['timestep_respacing'] = str(static_args.steps)
+    model_params['timestep_respacing'] = os.environ.get('GLID3_STEPS', str(static_args.steps))
 
 model_config = model_and_diffusion_defaults()
 model_config.update(model_params)
@@ -154,7 +154,6 @@ async def do_run(runtime_args):
     text_emb_clip = await clip_c.aencode([runtime_args.text] * runtime_args.batch_size)
     text_emb_clip_blank = await clip_c.aencode([runtime_args.negative] * runtime_args.batch_size)
 
-    print(text_emb.shape, text_blank.shape, text_emb_clip.shape, text_emb_clip_blank.shape)
     # torch.Size([8, 77, 1280]) torch.Size([8, 77, 1280]) (1, 768) (1, 768)
 
     print(text_emb_clip.shape, type(text_emb_clip))
