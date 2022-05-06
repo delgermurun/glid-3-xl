@@ -9,7 +9,7 @@ glid_path = os.environ.get('GLID_MODEL_PATH', '')
 parser.add_argument(
     '--model_path',
     type=str,
-    default=f'{glid_path}/finetune.pt',
+    default=f'{glid_path}/512x512_diffusion_uncond_finetune_008100.pt',
     help='path to the diffusion model',
 )
 
