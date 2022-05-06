@@ -135,7 +135,7 @@ set_requires_grad(bert, False)
 from clip_client import Client
 
 
-def do_run(runtime_args):
+async def do_run(runtime_args):
     if runtime_args.seed >= 0:
         torch.manual_seed(runtime_args.seed)
 
@@ -151,8 +151,9 @@ def do_run(runtime_args):
 
     # clip context
     clip_c = Client(server='grpc://demo-cas.jina.ai:51000')
-    text_emb_clip = clip_c.encode([runtime_args.text])
-    text_emb_clip_blank = clip_c.encode([runtime_args.negative])
+    text_emb_clip = clip_c.aencode([runtime_args.text])
+    text_emb_clip_blank = clip_c.aencode([runtime_args.negative])
+    print(text_emb_clip.shape, text_emb_clip_blank.shape)
 
     make_cutouts = MakeCutouts(336, runtime_args.cutn)
 
@@ -221,7 +222,8 @@ def do_run(runtime_args):
 
             clip_in = make_cutouts(x_img.add(1).div(2)).numpy()
             print(clip_in.shape())
-            clip_embeds = clip_c.encode(clip_in).float()
+            clip_embeds = clip_c.aencode(clip_in).float()
+            print(clip_embeds)
             dists = spherical_dist_loss(
                 clip_embeds.unsqueeze(1), text_emb_clip.unsqueeze(0)
             )
