@@ -154,6 +154,8 @@ async def do_run(runtime_args):
     text_emb_clip = await clip_c.aencode([runtime_args.text])
     text_emb_clip_blank = await clip_c.aencode([runtime_args.negative])
 
+    print(text_emb.shape, text_blank.shape, text_emb_clip.shape, text_emb_clip_blank.shape)
+
     print(text_emb_clip.shape, type(text_emb_clip))
     image_embed = None
 
