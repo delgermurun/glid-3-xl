@@ -151,8 +151,8 @@ async def do_run(runtime_args):
 
     # clip context
     clip_c = Client(server='grpc://demo-cas.jina.ai:51000')
-    text_emb_clip = clip_c.aencode([runtime_args.text])
-    text_emb_clip_blank = clip_c.aencode([runtime_args.negative])
+    text_emb_clip = await clip_c.aencode([runtime_args.text])
+    text_emb_clip_blank = await clip_c.aencode([runtime_args.negative])
     print(text_emb_clip.shape, text_emb_clip_blank.shape)
 
     make_cutouts = MakeCutouts(336, runtime_args.cutn)
@@ -222,7 +222,7 @@ async def do_run(runtime_args):
 
             clip_in = make_cutouts(x_img.add(1).div(2)).numpy()
             print(clip_in.shape)
-            clip_embeds = clip_c.aencode(clip_in).float()
+            clip_embeds = await clip_c.aencode(clip_in).float()
             print(clip_embeds.shape)
             dists = spherical_dist_loss(
                 clip_embeds.unsqueeze(1), text_emb_clip.unsqueeze(0)
