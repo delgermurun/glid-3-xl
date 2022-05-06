@@ -32,7 +32,7 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    '--negative', type=str, required=False, default='', help='negative text prompt'
+    '--negative', type=str, required=False, default='a', help='negative text prompt'
 )
 
 parser.add_argument(
