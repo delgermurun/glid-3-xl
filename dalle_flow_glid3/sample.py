@@ -170,7 +170,7 @@ async def do_run(runtime_args):
 
     kwargs = {
         "context": torch.cat([text_emb, text_blank], dim=0).float(),
-        "clip_embed": torch.cat([text_emb_clip, text_emb_clip_blank], dim=0).float()
+        "clip_embed": torch.cat([torch.from_numpy(text_emb_clip), torch.from_numpy(text_emb_clip_blank)], dim=0).to(device).float()
         if model_params['clip_embed_dim']
         else None,
         "image_embed": image_embed,
