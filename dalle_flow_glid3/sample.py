@@ -155,6 +155,7 @@ async def do_run(runtime_args):
     text_emb_clip_blank = await clip_c.aencode([runtime_args.negative])
 
     print(text_emb.shape, text_blank.shape, text_emb_clip.shape, text_emb_clip_blank.shape)
+    # torch.Size([8, 77, 1280]) torch.Size([8, 77, 1280]) (1, 768) (1, 768)
 
     print(text_emb_clip.shape, type(text_emb_clip))
     image_embed = None
