@@ -164,7 +164,7 @@ async def do_run(runtime_args):
 
     kwargs = {
         "context": text_emb,
-        "clip_embed": text_emb_clip.to(device).float()
+        "clip_embed": torch.from_numpy(text_emb_clip).to(device).float()
         if model_params['clip_embed_dim']
         else None,
         "image_embed": image_embed,
