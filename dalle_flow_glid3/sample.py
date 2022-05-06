@@ -148,7 +148,7 @@ async def do_run(runtime_args):
     clip_c = Client(server='grpc://demo-cas.jina.ai:51000')
     text_emb_clip = await clip_c.aencode([runtime_args.text])
 
-    print(text_emb_clip.shape)
+    print(text_emb_clip.shape, type(text_emb_clip))
     image_embed = None
 
     # image context
@@ -163,8 +163,8 @@ async def do_run(runtime_args):
         )
 
     kwargs = {
-        "context": torch.from_numpy(text_emb).float(),
-        "clip_embed": torch.from_numpy(text_emb_clip).float()
+        "context": text_emb,
+        "clip_embed": text_emb_clip.to(device).float()
         if model_params['clip_embed_dim']
         else None,
         "image_embed": image_embed,
