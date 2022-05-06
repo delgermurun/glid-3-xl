@@ -191,50 +191,6 @@ async def do_run(runtime_args):
 
     cur_t = None
 
-    def cond_fn(x, t, context=None, clip_embed=None, image_embed=None):
-        with torch.enable_grad():
-            x = x[: runtime_args.batch_size].detach().requires_grad_()
-
-            n = x.shape[0]
-
-            my_t = torch.ones([n], device=device, dtype=torch.long) * cur_t
-
-            kw = {
-                'context': context[: runtime_args.batch_size],
-                'clip_embed': clip_embed[: runtime_args.batch_size]
-                if model_params['clip_embed_dim']
-                else None,
-                'image_embed': image_embed[: runtime_args.batch_size]
-                if image_embed is not None
-                else None,
-            }
-
-            out = diffusion.p_mean_variance(
-                model, x, my_t, clip_denoised=False, model_kwargs=kw
-            )
-
-            fac = diffusion.sqrt_one_minus_alphas_cumprod[cur_t]
-            x_in = out['pred_xstart'] * fac + x * (1 - fac)
-
-            x_in /= 0.18215
-
-            x_img = ldm.decode(x_in)
-
-            clip_in = make_cutouts(x_img.add(1).div(2)).numpy()
-            print(clip_in.shape)
-            clip_embeds = await clip_c.aencode(clip_in).float()
-            print(clip_embeds.shape)
-            dists = spherical_dist_loss(
-                clip_embeds.unsqueeze(1), text_emb_clip.unsqueeze(0)
-            )
-            dists = dists.view([runtime_args.cutn, n, -1])
-
-            losses = dists.sum(2).mean(0)
-
-            loss = losses.sum() * runtime_args.clip_guidance_scale
-
-            return -torch.autograd.grad(loss, x)[0]
-
     if runtime_args.ddpm:
         sample_fn = diffusion.ddpm_sample_loop_progressive
     elif runtime_args.ddim:
@@ -282,7 +238,7 @@ async def do_run(runtime_args):
             ),
             clip_denoised=False,
             model_kwargs=kwargs,
-            cond_fn=cond_fn if runtime_args.clip_guidance else None,
+            cond_fn=None,
             device=device,
             progress=True,
             init_image=init,
