@@ -113,7 +113,7 @@ async def do_run(runtime_args):
     )
 
     # clip context
-    clip_c = Client(server='grpc://demo-cas.jina.ai:51000')
+    clip_c = Client(server='grpcs://demo-cas.jina.ai:2096')
     text_emb_clip = await clip_c.aencode([runtime_args.text] * runtime_args.batch_size)
     text_emb_clip_blank = await clip_c.aencode(
         [runtime_args.negative] * runtime_args.batch_size
