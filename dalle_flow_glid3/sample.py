@@ -1,6 +1,9 @@
 import os.path
 from pathlib import Path
+import json
 
+import requests
+import numpy as np
 import torch
 from PIL import Image
 from torchvision.transforms import functional as TF
@@ -95,29 +98,41 @@ bert.to(device)
 bert.half().eval()
 set_requires_grad(bert, False)
 
-from clip_client import Client
+blank_clip_embedding = None
+blank_bert_embedding = None
 
+async def do_run(runtime_args, text_emb_clip):
+    global blank_clip_embedding, blank_bert_embedding
 
-async def do_run(runtime_args):
     if runtime_args.seed >= 0:
         torch.manual_seed(runtime_args.seed)
 
+    if blank_bert_embedding is None:
+        print('Generating blank BERT embedding')
+        blank_bert_embedding = (
+            bert.encode([runtime_args.negative])
+        ).to(device).float()
+
+    if blank_clip_embedding is None:
+        print('Generating blank CLIP embedding')
+        res = requests.post('https://demo-cas.jina.ai:8443/post',
+            data=json.dumps({'execEndpoint':'/', 'data': [{'text': runtime_args.negative}]}),
+            headers={'content-type': 'application/json'}
+        ).json()
+
+        blank_clip_embedding = np.array(res['data'][0]['embedding']).astype(
+            model_config['use_fp16'] and np.float16 or np.float32
+        ).reshape(1, -1)
+
     # bert context
     text_emb = (
-        bert.encode([runtime_args.text] * runtime_args.batch_size).to(device).float()
-    )
-    text_blank = (
-        bert.encode([runtime_args.negative] * runtime_args.batch_size)
-        .to(device)
-        .float()
-    )
+        bert.encode([runtime_args.text]).to(device).float()
+    ).repeat(runtime_args.batch_size, 1, 1)
+    text_blank = blank_bert_embedding.repeat(runtime_args.batch_size, 1, 1)
 
     # clip context
-    clip_c = Client(server='grpcs://demo-cas.jina.ai:2096')
-    text_emb_clip = await clip_c.aencode([runtime_args.text] * runtime_args.batch_size)
-    text_emb_clip_blank = await clip_c.aencode(
-        [runtime_args.negative] * runtime_args.batch_size
-    )
+    text_emb_clip = np.repeat(text_emb_clip[np.newaxis, :], runtime_args.batch_size, axis=0)
+    text_emb_clip_blank = np.repeat(blank_clip_embedding, runtime_args.batch_size, axis=0)
 
     # torch.Size([8, 77, 1280]) torch.Size([8, 77, 1280]) (1, 768) (1, 768)
 
