@@ -101,7 +101,7 @@ set_requires_grad(bert, False)
 blank_clip_embedding = None
 blank_bert_embedding = None
 
-async def do_run(runtime_args, text_emb_clip):
+def do_run(runtime_args, text_emb_clip):
     global blank_clip_embedding, blank_bert_embedding
 
     if runtime_args.seed >= 0:
