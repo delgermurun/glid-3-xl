@@ -1,21 +1,13 @@
-import json
-import requests
 import numpy as np
 
 from .model import bert, model_config, device
 
-def generate_blank_embeddings(blank, clip_as_service_url):
+def generate_blank_embeddings(blank_text, clip_blank_encoding):
     blank_bert_embedding = (
-        bert.encode([blank])
+        bert.encode([blank_text])
     ).to(device).float()
 
-    res = requests.post(
-        f'{clip_as_service_url}/post',
-        data=json.dumps({'execEndpoint':'/', 'data': [{'text': blank}]}),
-        headers={'content-type': 'application/json'}
-    ).json()
-
-    blank_clip_embedding = np.array(res['data'][0]['embedding']).astype(
+    blank_clip_embedding = np.array(clip_blank_encoding).astype(
         model_config['use_fp16'] and np.float16 or np.float32
     ).reshape(1, -1)
 
