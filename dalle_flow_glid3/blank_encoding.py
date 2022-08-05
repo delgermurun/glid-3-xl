@@ -4,13 +4,13 @@ import numpy as np
 
 from .model import bert, model_config, device
 
-def generate_blank_embeddings(blank):
+def generate_blank_embeddings(blank, clip_as_service_url):
     blank_bert_embedding = (
         bert.encode([blank])
     ).to(device).float()
 
     res = requests.post(
-        'https://demo-cas.jina.ai:8443/post',
+        f'{clip_as_service_url}/post',
         data=json.dumps({'execEndpoint':'/', 'data': [{'text': blank}]}),
         headers={'content-type': 'application/json'}
     ).json()
